@@ -1,0 +1,23 @@
+# Changes here will be overwritten by Copier
+_commit: 4bfa269
+_src_path: gh:34j/pypackage-template
+add_me_as_contributor: true
+copyright_year: '2025'
+documentation: true
+email: 34j.95a2p@simplelogin.com
+full_name: 34j
+github_app_installation_ids: ''
+github_username: 34j
+has_cli: false
+initial_commit: true
+is_django_package: false
+open_source_license: MIT
+open_with_editor: true
+package_name: array_api_shape_check
+project_name: array-api-shape-check
+project_short_description: Check shapes of input arrays easily
+project_slug: array-api-shape-check
+run_uv_sync: true
+setup_github: true
+setup_pre_commit: true
+
