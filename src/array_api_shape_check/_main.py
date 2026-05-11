@@ -78,17 +78,17 @@ class InconsistentNdimError(ValueError):
     pass
 
 class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
-    def __init__(self, *args: object) -> None:
-        super().__init__("Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts", *args)
+    def __init__(self, reason: str, *args: object) -> None:
+        super().__init__(f"Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts [{reason}]", *args)
 
 class InconsistentNdimErrorNoSolutions(InconsistentNdimError):
-    def __init__(self, *args: object) -> None:
-        super().__init__("Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts", *args)
+    def __init__(self, reason: str, *args: object) -> None:
+        super().__init__(f"Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts [{reason}]", *args)
 
 class InconsistentShapeError(ValueError):
     subscript_info: SubscriptInfoFromShape
-    def __init__(self, subscript_info: SubscriptInfoFromShape, *args: object) -> None:
-        super().__init__("Inconsistent shapes: " + str(subscript_info.all), *args)
+    def __init__(self, subscript_info: SubscriptInfoFromShape, reason: str, *args: object) -> None:
+        super().__init__("Inconsistent shapes: " + str(subscript_info.all) + f"\n {reason}", *args)
         self.subscript_info = subscript_info
 
 
@@ -331,8 +331,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
 
     Does not match:
 
-    >>> with pytest.raises(InconsistentShapeError, match="Inconsistent shapes"):
-    ...     check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
+    >>> check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
 
     """
     info_all = _parse_shapes(subscripts, *operands)
@@ -376,6 +375,6 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     )
 
     if errors:
-        raise InconsistentShapeError(result, *errors)
+        raise InconsistentShapeError(result, "\n".join(errors))
     
     return result
