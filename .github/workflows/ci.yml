@@ -34,8 +34,6 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
-          - "3.10"
-          - "3.11"
           - "3.12"
           - "3.13"
           - "3.14"
@@ -49,7 +47,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --no-python-downloads
+      - run: uv sync
         shell: bash
       - run: uv run pytest
         shell: bash
