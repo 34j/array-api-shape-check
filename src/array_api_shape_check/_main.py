@@ -316,6 +316,11 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     >>> with pytest.raises(ValueError, match="no solution"):
     ...     check_shapes("*i,*i", (1, 1), (1, 1, 1))
 
+    Does not match:
+
+    >>> with pytest.raises(ValueError, match="Shape check failed"):
+    ...     check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
+
     """
     info_all = _parse_shapes(subscripts, *operands)
     info_flatten_keyed = [(i, item) for i, info_array in enumerate(info_all) for item in info_array]
