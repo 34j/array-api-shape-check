@@ -4,7 +4,7 @@ requires = [ "setuptools>=77.0.3" ]
 
 [project]
 name = "array-api-shape-check"
-version = "0.1.0"
+version = "0.1.1"
 description = "Check shapes of input arrays easily"
 readme = "README.md"
 license = "MIT"
