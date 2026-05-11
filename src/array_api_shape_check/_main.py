@@ -161,7 +161,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     Examples
     --------
     >>> parse_variable_ndim("ij,*k*l,*li", (2,4,4))
-    {'k': 2, 'l': 2}
+    {'k': 1, 'l': 3}
 
     """
     info = parse_subscripts(subscripts)
@@ -184,7 +184,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
         )
     rhs = np.asarray(ndims, dtype=int)
     del ndims
-    mat = np.zeros((len(info.unique), len(info_variable_unique)), dtype=int)
+    mat = np.zeros((len(info.all), len(info_variable_unique)), dtype=int)
     for i, info_array in enumerate(info.all):
         for subscript in info_array:
             if subscript.is_variable:
@@ -208,7 +208,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
         raise ValueError(
             "Inconsistent ndims: number of dimensions for variable subscripts cannot be negative"
         )
-    return {subscript.name: variable_dims[j] for j, subscript in enumerate(info_variable_unique)}
+    return {subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)}
 
 
 def parse_shapes(
