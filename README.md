@@ -57,6 +57,20 @@ Install this via pip (or your favourite package manager):
 (i:3, j:4, *k:(5,), *l:(6, 7))
 ```
 
+Diving into the details of the first item:
+
+```python
+>>> item = info.all[0][0]
+>>> item.name # the name of the subscript
+'i'
+>>> item.is_variable # whether the subscript is variable (starts with "*")
+False
+>>> item.shape_current # the current shape of the subscript
+(1,)
+>>> item.shape_broadcasted # the broadcasted shape of the subscript
+(3,)
+```
+
 Not enough information to determine variable subscript ndims:
 
 ```python
