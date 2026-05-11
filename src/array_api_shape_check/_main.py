@@ -15,6 +15,9 @@ class SubscriptInfoFromSubcriptItem:
     is_variable: bool = False
     """Whether the subscript is variable (* prefix or ...)"""
 
+    def __repr__(self) -> str:
+        return f"{'*' if self.is_variable else ''}{self.name}"
+
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromSubcript:
@@ -72,6 +75,10 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     ValueError
         If the subscript is invalid.
 
+    Examples
+    --------
+    >>> parse_subscripts("ij,*k*l,*li")
+
     """
     # If . other than ...
     if re.search(r"(?<!\.)\.(?!\.)", subscripts):
@@ -81,18 +88,19 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     subscripts = subscripts.rstrip()
     info_all: tuple[tuple[SubscriptInfoFromSubcriptItem, ...], ...] = ()
     info_array: tuple[SubscriptInfoFromSubcriptItem, ...] = ()
-    for name in subscripts.split(","):
-        is_variable = False
-        if name == ",":
-            info_all += (tuple(info_array),)
-            info_array = ()
-        elif name == "*":
-            if is_variable:
-                raise ValueError("Invalid subscript: '*' cannot be repeated")
-            is_variable = True
-            continue
-        else:
-            info_array += (SubscriptInfoFromSubcriptItem(name=name, is_variable=is_variable),)
+    for name_ in subscripts.split(","):
+        for name in name_:
+            is_variable = False
+            if name == ",":
+                info_all += (tuple(info_array),)
+                info_array = ()
+            elif name == "*":
+                if is_variable:
+                    raise ValueError("Invalid subscript: '*' cannot be repeated")
+                is_variable = True
+                continue
+            else:
+                info_array += (SubscriptInfoFromSubcriptItem(name=name, is_variable=is_variable),)
     else:
         info_all += (tuple(info_array),)
 
