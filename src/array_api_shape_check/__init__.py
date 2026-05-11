@@ -7,7 +7,7 @@ from ._main import (
     SubscriptInfoFromSubcript,
     SubscriptInfoFromSubcriptItem,
     check_shapes,
-    parse_shapes,
+    _parse_shapes,
     parse_subscripts,
     parse_variable_ndim,
 )
@@ -20,7 +20,7 @@ __all__ = [
     "SubscriptInfoFromSubcript",
     "SubscriptInfoFromSubcriptItem",
     "check_shapes",
-    "parse_shapes",
+    "_parse_shapes",
     "parse_subscripts",
     "parse_variable_ndim",
 ]

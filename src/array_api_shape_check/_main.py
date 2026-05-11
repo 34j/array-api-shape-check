@@ -160,8 +160,8 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
 
     Examples
     --------
-    >>> parse_variable_ndim("ij,*k*l,*li", (2,4,4))
-    {'k': 1, 'l': 3}
+    >>> parse_variable_ndim("ij,*k*l,*li", (2,3,3))
+    {'k': 1, 'l': 2}
 
     Not enough infomation to determine variable subscript ndims:
 
@@ -219,7 +219,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     return {subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)}
 
 
-def parse_shapes(
+def _parse_shapes(
     subscripts: str, /, *operands: Array | tuple[int, ...]
 ) -> tuple[tuple[SubscriptInfoFromShapeItemUnchecked, ...], ...]:
     info = parse_subscripts(subscripts)
@@ -262,34 +262,76 @@ def parse_shapes(
 
 
 def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> SubscriptInfoFromShape:
-    info_all = parse_shapes(subscripts, *operands)
+    """
+    Parse variable subscript ndims by solving linear equations.
+
+    Parameters
+    ----------
+    subscripts : str
+        Subscripts separated by "," per operand.
+
+        1. Subscripts must be of length 1
+        2. Subscripts must not be "*" or ".".
+        3. If start with "*", the subscript is treated as variable.
+        4. "..." is replaced with "*.".]
+    ndims : Sequence[int]
+        The number of dimensions for each operand.
+
+    Returns
+    -------
+    SubscriptInfoFromSubcript
+        The parsed subscript info.
+
+    Raises
+    ------
+    ValueError
+        If the subscript is invalid.
+
+    Examples
+    --------
+    >>> check_shapes("ij,*k*l,*li", (1,4), (5,6,7), (1,7,3))
+
+    Not enough infomation to determine variable subscript ndims:
+
+    >>> import pytest
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i*j", (2,))
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i*j,*i*j", (2, 2))
+
+    No solution to determine variable subscript ndims:
+
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i,*i", (2, 3))
+
+    """
+    info_all = _parse_shapes(subscripts, *operands)
     info_flatten_keyed = [(i, item) for i, info_array in enumerate(info_all) for item in info_array]
     errors = []
+    shape_broadcasted = {}
     for key, group in groupby(info_flatten_keyed, key=lambda x: x[1].name):
         group_list = list(group)
         shapes = [item.shape_current for _, item in group_list]
         try:
-            shape_broadcasted = np.broadcast_shapes(*shapes)
+            shape_broadcasted[key] = np.broadcast_shapes(*shapes)
         except ValueError:
             inner_text = "".join([f"{shape} ({i})" for i, shape in group_list])
-            errors.append(ValueError(f"Key {key}: shapes {inner_text} are not broadcastable"))
-    if errors:
-        raise ExceptionGroup("Shape check failed", errors)
+            errors.append("Key {key}: shapes {inner_text} are not broadcastable")
 
     info_all_new = ()
     for info_array in info_all:
         info_array_new = ()
         for item in info_array:
-            shape_broadcasted = np.broadcast_shapes(item.shape_current, ())
             info_array_new += (
                 SubscriptInfoFromShapeItem(
                     name=item.name,
                     is_variable=item.is_variable,
                     shape_current=item.shape_current,
-                    shape_broadcasted=shape_broadcasted,
+                    shape_broadcasted=shape_broadcasted.get(item.name) # type: ignore
                 ),
             )
         info_all_new += (info_array_new,)
+
     info_unique = {
         SubscriptInfoFromShapeItemUnchecked(
             name=item.name,
@@ -299,6 +341,11 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         for info_array in info_all_new
         for item in info_array
     }
-    return SubscriptInfoFromShape(
+    result = SubscriptInfoFromShape(
         all=info_all_new, unique=tuple(sorted(info_unique, key=lambda x: x.name))
     )
+
+    if errors:
+        raise ValueError(f"Shape check failed: {result}" + "/n".join(errors))
+    
+    return result
