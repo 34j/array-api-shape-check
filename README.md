@@ -38,7 +38,7 @@
 
 ---
 
-Check shapes of input arrays easily
+Check shapes of input arrays easily.
 
 ## Installation
 
@@ -56,6 +56,8 @@ Install this via pip (or your favourite package manager):
 >>> info.unique
 (i:3, j:4, *k:(5,), *l:(6, 7))
 ```
+
+Internally `check_shapes()` calls `parse_variable_ndim()`, which determines the number of dimensions for variable subscripts by least squares. If this is successful, checks if each subscript is consistent, then finnaly raises error for all inconsistencies at once.
 
 Diving into the details of the first item:
 
