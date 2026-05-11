@@ -46,6 +46,50 @@ Install this via pip (or your favourite package manager):
 
 `pip install array-api-shape-check`
 
+## Usage
+
+```python
+>>> from array_api_shape_check import check_shapes
+>>> info = check_shapes("ij,*k*l,*li", (1, 4), (5, 6, 7), (1, 7, 3))
+>>> info.all
+((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3))
+>>> info.unique
+(i:3, j:4, *k:(5,), *l:(6, 7))
+```
+
+Not enough information to determine variable subscript ndims:
+
+```python
+>>> import pytest
+>>> from array_api_shape_check import InconsistentNdimErrorMultipleSolutions, InconsistentNdimErrorNoSolutions, InconsistentShapeError
+>>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
+...     check_shapes(
+...         "*i*j",
+...         (
+...             1,
+...             1,
+...         ),
+...     )
+>>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
+...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
+```
+
+No solution to determine variable subscript ndims:
+
+```python
+>>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="residuals"):
+...     check_shapes("*i,*i", (1, 1), (1, 1, 1))
+>>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="negative"):
+...     check_shapes("*ij", ())
+```
+
+Does not match:
+
+```python
+>>> with pytest.raises(InconsistentShapeError):
+...     check_shapes("ij,*k*l,*li", (3, 4), (5, 6), (1, 7, 3))
+```
+
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):

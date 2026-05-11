@@ -359,9 +359,11 @@ def check_shapes(
 
     Examples
     --------
-    >>> check_shapes("ij,*k*l,*li", (1, 4), (5, 6, 7), (1, 7, 3))
-    SubscriptInfoFromShape(all=((i:1->3, j:4), (*k:(5,), *l:(6, 7)),
-    (*l:(1, 7)->(6, 7), i:3)), unique=(i:3, j:4, *k:(5,), *l:(6, 7)))
+    >>> info = check_shapes("ij,*k*l,*li", (1, 4), (5, 6, 7), (1, 7, 3))
+    >>> info.all
+    ((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3))
+    >>> info.unique
+    (i:3, j:4, *k:(5,), *l:(6, 7))
 
     Not enough information to determine variable subscript ndims:
 
