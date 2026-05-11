@@ -365,17 +365,28 @@ def check_shapes(
     >>> info.unique
     (i:3, j:4, *k:(5,), *l:(6, 7))
 
+    Internally `check_shapes()` calls `parse_variable_ndim()`,
+    which determines the number of dimensions for variable subscripts by least squares.
+    If this is successful, checks if each subscript is consistent,
+    then finnaly raises error for all inconsistencies at once.
+
+    Diving into the details of the first item:
+
+    >>> item = info.all[0][0]
+    >>> item.name  # the name of the subscript
+    'i'
+    >>> item.is_variable  # whether the subscript is variable (starts with "*")
+    False
+    >>> item.shape_current  # the current shape of the subscript
+    (1,)
+    >>> item.shape_broadcasted  # the broadcasted shape of the subscript
+    (3,)
+
     Not enough information to determine variable subscript ndims:
 
     >>> import pytest
     >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
-    ...     check_shapes(
-    ...         "*i*j",
-    ...         (
-    ...             1,
-    ...             1,
-    ...         ),
-    ...     )
+    ...     check_shapes("*i*j", (1, 1))
     >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
     ...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
 

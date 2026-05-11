@@ -79,13 +79,7 @@ Not enough information to determine variable subscript ndims:
 >>> import pytest
 >>> from array_api_shape_check import InconsistentNdimErrorMultipleSolutions, InconsistentNdimErrorNoSolutions, InconsistentShapeError
 >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
-...     check_shapes(
-...         "*i*j",
-...         (
-...             1,
-...             1,
-...         ),
-...     )
+...     check_shapes("*i*j", (1, 1))
 >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
 ...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
 ```
