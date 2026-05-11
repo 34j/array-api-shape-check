@@ -12,7 +12,7 @@ from array_api.latest import Array
 class SubscriptInfoFromSubcriptItem:
     name: str
     """The name of the subscript, must be of length 1 and must not be '*' or '.'"""
-    is_variable: bool = False
+    is_variable: bool
     """Whether the subscript is variable (* prefix or ...)"""
 
     def __repr__(self) -> str:
@@ -22,7 +22,7 @@ class SubscriptInfoFromSubcriptItem:
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromSubcript:
     all: tuple[tuple[SubscriptInfoFromSubcriptItem, ...], ...]
-    unique: set[SubscriptInfoFromSubcriptItem]
+    unique: tuple[SubscriptInfoFromSubcriptItem, ...]
 
 
 @attrs.frozen(kw_only=True)
@@ -47,8 +47,10 @@ class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
     """The subscript info grouped by order, then by operand"""
-    unique: set[SubscriptInfoFromShapeItemUnchecked]
-    """The unique subscripts, ignoring order and shapes not broadcasted"""
+    unique: tuple[SubscriptInfoFromShapeItemUnchecked, ...]
+    """The unique subscripts,
+    ignoring order and shapes not broadcasted,
+    sorted lexicographically by name"""
 
 
 def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
@@ -78,6 +80,7 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     Examples
     --------
     >>> parse_subscripts("ij,*k*l,*li")
+    SubscriptInfoFromSubcript(all=((i, j, *k, *l, *l, i),), unique=(i, j, *k, *l))
 
     """
     # If . other than ...
@@ -89,8 +92,8 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     info_all: tuple[tuple[SubscriptInfoFromSubcriptItem, ...], ...] = ()
     info_array: tuple[SubscriptInfoFromSubcriptItem, ...] = ()
     for name_ in subscripts.split(","):
+        is_variable = False
         for name in name_:
-            is_variable = False
             if name == ",":
                 info_all += (tuple(info_array),)
                 info_array = ()
@@ -98,9 +101,9 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
                 if is_variable:
                     raise ValueError("Invalid subscript: '*' cannot be repeated")
                 is_variable = True
-                continue
             else:
                 info_array += (SubscriptInfoFromSubcriptItem(name=name, is_variable=is_variable),)
+                is_variable = False
     else:
         info_all += (tuple(info_array),)
 
@@ -116,7 +119,9 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
             )
         names.add(info.name)
 
-    return SubscriptInfoFromSubcript(all=info_all, unique=info_unique)
+    return SubscriptInfoFromSubcript(
+        all=info_all, unique=tuple(sorted(info_unique, key=lambda x: x.name))
+    )
 
 
 def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]:
@@ -242,4 +247,6 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         for info_array in info_all_new
         for item in info_array
     }
-    return SubscriptInfoFromShape(all=info_all_new, unique=info_unique)
+    return SubscriptInfoFromShape(
+        all=info_all_new, unique=tuple(sorted(info_unique, key=lambda x: x.name))
+    )
