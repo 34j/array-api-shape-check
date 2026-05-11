@@ -163,6 +163,19 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     >>> parse_variable_ndim("ij,*k*l,*li", (2,4,4))
     {'k': 1, 'l': 3}
 
+    Not enough infomation to determine variable subscript ndims:
+
+    >>> import pytest
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i*j", (2,))
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i*j,*i*j", (2, 2))
+
+    No solution to determine variable subscript ndims:
+
+    >>> with pytest.raises(ValueError):
+    ...     parse_variable_ndim("*i,*i", (2, 3))
+
     """
     info = parse_subscripts(subscripts)
     del subscripts
@@ -175,12 +188,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     info_variable_unique = [subscript for subscript in info.unique if subscript.is_variable]
     if len(info_variable_unique) > len(info.all):
         raise ValueError(
-            f"The number of unique subscripts ({len(info_variable_unique)}) "
-            "is greater than "
-            f"the number of operands ({len(info.all)}), "
-            "making it impossible to assume "
-            "the number of dimensions "
-            "for each variable subscript"
+            "Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts"
         )
     rhs = np.asarray(ndims, dtype=int)
     del ndims
@@ -197,7 +205,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     variable_dims, residuals, _rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
     if _rank != len(info_variable_unique):
         raise ValueError(
-            "Inconsistent ndims: there are not enough informations to determine the number of dimensions for variable subscripts"
+            "Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts"
         )
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
         raise ValueError(
