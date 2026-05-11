@@ -6,8 +6,8 @@ from ._main import (
     SubscriptInfoFromShapeItemUnique,
     SubscriptInfoFromSubcript,
     SubscriptInfoFromSubcriptItem,
-    check_shapes,
     _parse_shapes,
+    check_shapes,
     parse_subscripts,
     parse_variable_ndim,
 )
@@ -19,8 +19,8 @@ __all__ = [
     "SubscriptInfoFromShapeItemUnique",
     "SubscriptInfoFromSubcript",
     "SubscriptInfoFromSubcriptItem",
-    "check_shapes",
     "_parse_shapes",
+    "check_shapes",
     "parse_subscripts",
     "parse_variable_ndim",
 ]

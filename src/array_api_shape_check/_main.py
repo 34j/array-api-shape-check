@@ -70,27 +70,43 @@ class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
     """The subscript info grouped by order, then by operand"""
-    unique: tuple[SubscriptInfoFromShapeItemUnchecked, ...]
+    unique: tuple[SubscriptInfoFromShapeItemUnique, ...]
     """The unique subscripts,
     ignoring order and shapes not broadcasted,
     sorted lexicographically by name"""
 
+
 class InconsistentNdimError(ValueError):
     pass
 
+
 class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
     def __init__(self, reason: str, *args: object) -> None:
-        super().__init__(f"Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts [{reason}]", *args)
+        super().__init__(
+            f"Inconsistent ndims: there are multiple possible solutions "
+            "to determine the number of dimensions "
+            f"for variable subscripts [{reason}]",
+            *args,
+        )
+
 
 class InconsistentNdimErrorNoSolutions(InconsistentNdimError):
     def __init__(self, reason: str, *args: object) -> None:
-        super().__init__(f"Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts [{reason}]", *args)
+        super().__init__(
+            f"Inconsistent ndims: there are no solution "
+            f"to determine the number of dimensions "
+            f"for variable subscripts [{reason}]",
+            *args,
+        )
+
 
 class InconsistentShapeError(ValueError):
     subscript_info: SubscriptInfoFromShape
+
     def __init__(self, subscript_info: SubscriptInfoFromShape, reason: str, *args: object) -> None:
         super().__init__("Inconsistent shapes: " + str(subscript_info.all) + f"\n {reason}", *args)
         self.subscript_info = subscript_info
+
 
 def _get_operand_names(*operands: Any) -> list[str | None]:
     import inspect
@@ -113,6 +129,7 @@ def _get_operand_names(*operands: Any) -> list[str | None]:
         else:
             names.append(None)
     return names
+
 
 def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
     """
@@ -209,10 +226,10 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
 
     Examples
     --------
-    >>> parse_variable_ndim("ij,*k*l,*li", (2,3,3))
+    >>> parse_variable_ndim("ij,*k*l,*li", (2, 3, 3))
     {'k': 1, 'l': 2}
 
-    Not enough infomation to determine variable subscript ndims:
+    Not enough information to determine variable subscript ndims:
 
     >>> import pytest
     >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
@@ -251,15 +268,17 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
                 rhs[i] -= 1
 
     # solve overdetermined linear equations using least squares method
-    variable_dims, residuals, _rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
-    if _rank != len(info_variable_unique):
+    variable_dims, residuals, rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
+    if rank != len(info_variable_unique):
         raise InconsistentNdimErrorMultipleSolutions("rank")
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
         raise InconsistentNdimErrorNoSolutions("residuals")
     variable_dims = np.round(variable_dims).astype(int)
     if np.any(variable_dims < 0):
         raise InconsistentNdimErrorNoSolutions("negative")
-    return {subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)}
+    return {
+        subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)
+    }
 
 
 def _parse_shapes(
@@ -297,15 +316,17 @@ def _parse_shapes(
                 SubscriptInfoFromShapeItemUnchecked(
                     name=item.name,
                     is_variable=item.is_variable,
-                    shape_current=shape[:name_to_ndim[item.name]],
+                    shape_current=shape[: name_to_ndim[item.name]],
                 ),
             )
-            shape = shape[name_to_ndim[item.name]:]
+            shape = shape[name_to_ndim[item.name] :]
         info_all += (info_array_new,)
     return info_all
 
 
-def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: str | None = None) -> SubscriptInfoFromShape:
+def check_shapes(
+    subscripts: str, /, *operands: Array | tuple[int, ...], names: str | None = None
+) -> SubscriptInfoFromShape:
     """
     Parse variable subscript ndims by solving linear equations.
 
@@ -318,10 +339,13 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
         2. Subscripts must not be "*" or ".".
         3. If start with "*", the subscript is treated as variable.
         4. "..." is replaced with "*.".]
+    operands : Array or tuple[int, ...]
+        Arrays or shape tuples corresponding to check.
     ndims : Sequence[int]
         The number of dimensions for each operand.
     names : str | None
-        The names of operands separated by ",",, used for error messages. If None, operand indices are used instead.
+        The names of operands separated by ",",
+        used for error messages. If None, operand indices are used instead.
 
     Returns
     -------
@@ -335,14 +359,21 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
 
     Examples
     --------
-    >>> check_shapes("ij,*k*l,*li", (1,4), (5,6,7), (1,7,3))
-    SubscriptInfoFromShape(all=((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3)), unique=(i:3, j:4, *k:(5,), *l:(6, 7)))
+    >>> check_shapes("ij,*k*l,*li", (1, 4), (5, 6, 7), (1, 7, 3))
+    SubscriptInfoFromShape(all=((i:1->3, j:4), (*k:(5,), *l:(6, 7)),
+    (*l:(1, 7)->(6, 7), i:3)), unique=(i:3, j:4, *k:(5,), *l:(6, 7)))
 
-    Not enough infomation to determine variable subscript ndims:
+    Not enough information to determine variable subscript ndims:
 
     >>> import pytest
     >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
-    ...     check_shapes("*i*j", (1,1,))
+    ...     check_shapes(
+    ...         "*i*j",
+    ...         (
+    ...             1,
+    ...             1,
+    ...         ),
+    ...     )
     >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
     ...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
 
@@ -354,8 +385,8 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
     ...     check_shapes("*ij", ())
 
     Does not match:
-    >>> x = (1, 4)
-    >>> check_shapes("ij,*k*l,*li", x, (5, 6), (1,7,3))
+    >>> with pytest.raises(InconsistentShapeError):
+    ...     check_shapes("ij,*k*l,*li", (3, 4), (5, 6), (1, 7, 3))
 
     """
     info_all = _parse_shapes(subscripts, *operands)
@@ -363,7 +394,8 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
         names_ = [str(name) for name in names.split(",")]
         if len(names_) != len(info_all):
             raise ValueError(
-                f"Number of names ({len(names_)}) does not match number of operands ({len(info_all)})"
+                f"Number of names ({len(names_)}) "
+                f"does not match number of operands ({len(info_all)})"
             )
     else:
         names_ = [str(i) for i in range(len(info_all))]
@@ -388,7 +420,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
                     name=item.name,
                     is_variable=item.is_variable,
                     shape_current=item.shape_current,
-                    shape_broadcasted=shape_broadcasted.get(item.name) # type: ignore
+                    shape_broadcasted=shape_broadcasted.get(item.name),  # type: ignore
                 ),
             )
         info_all_new += (info_array_new,)
@@ -397,7 +429,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
         SubscriptInfoFromShapeItemUnique(
             name=item.name,
             is_variable=item.is_variable,
-            shape_broadcasted=shape_broadcasted.get(item.name) # type: ignore
+            shape_broadcasted=shape_broadcasted.get(item.name),  # type: ignore
         )
         for info_array in info_all_new
         for item in info_array
@@ -408,5 +440,5 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: 
 
     if errors:
         raise InconsistentShapeError(result, "\n".join(errors))
-    
+
     return result
