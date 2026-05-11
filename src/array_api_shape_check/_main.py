@@ -318,7 +318,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
 
     Does not match:
 
-    >>> with pytest.raises(ValueError, match="Shape check failed"):
+    >>> with pytest.raises(ValueError, match="Inconsistent shapes"):
     ...     check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
 
     """
@@ -332,7 +332,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         try:
             shape_broadcasted[key] = np.broadcast_shapes(*shapes)
         except ValueError:
-            inner_text = "".join([f"{shape} ({i})" for i, shape in group_list])
+            inner_text = ", ".join([f"{shape} ({i})" for i, shape in group_list])
             errors.append(f"Key {key}: shapes {inner_text} are not broadcastable")
 
     info_all_new = ()
@@ -363,6 +363,6 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     )
 
     if errors:
-        raise ValueError(f"Shape check failed: {result.all}\n" + "/n".join(errors))
+        raise ValueError(f"Inconsistent shapes: {result.all}\n" + "/n".join(errors))
     
     return result
