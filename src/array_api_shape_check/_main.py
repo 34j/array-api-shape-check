@@ -11,7 +11,9 @@ from array_api.latest import Array
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromSubcriptItem:
     name: str
+    """The name of the subscript, must be of length 1 and must not be '*' or '.'"""
     is_variable: bool = False
+    """Whether the subscript is variable (* prefix or ...)"""
 
 
 @attrs.frozen(kw_only=True)
@@ -23,22 +25,27 @@ class SubscriptInfoFromSubcript:
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShapeItemUnchecked(SubscriptInfoFromSubcriptItem):
     shape_current: tuple[int, ...]
+    """The shape of the operand corresponding to this subscript"""
 
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
     shape_broadcasted: tuple[int, ...]
+    """The shape after broadcasting with other subscripts with the same name"""
 
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
     shape_broadcasted: tuple[int, ...]
+    """The shape after broadcasting with other subscripts with the same name"""
 
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
+    """The subscript info grouped by order, then by operand"""
     unique: set[SubscriptInfoFromShapeItemUnchecked]
+    """The unique subscripts, ignoring order and shapes not broadcasted"""
 
 
 def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
@@ -106,6 +113,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]
 
     # solve overdetermined linear equations using least squares method
     variable_dims, residuals, _rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
+    print(variable_dims, residuals, _rank, _singular_values)
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
         raise ValueError(
             "Inconsistent ndims: cannot determine the number of dimensions for variable subscripts"
