@@ -2,6 +2,7 @@ import re
 from collections import defaultdict
 from collections.abc import Sequence
 from itertools import groupby
+from typing import Any
 
 import attrs
 import numpy as np
@@ -91,6 +92,27 @@ class InconsistentShapeError(ValueError):
         super().__init__("Inconsistent shapes: " + str(subscript_info.all) + f"\n {reason}", *args)
         self.subscript_info = subscript_info
 
+def _get_operand_names(*operands: Any) -> list[str | None]:
+    import inspect
+
+    frame = inspect.currentframe()
+    if frame is None:
+        return [None] * len(operands)
+    frame = frame.f_back
+    if frame is None:
+        return [None] * len(operands)
+    frame = frame.f_back
+    if frame is None:
+        return [None] * len(operands)
+    names = []
+    for operand in operands:
+        for var_name, var_value in frame.f_locals.items():
+            if var_value is operand:
+                names.append(var_name)
+                break
+        else:
+            names.append(None)
+    return names
 
 def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
     """
@@ -283,7 +305,7 @@ def _parse_shapes(
     return info_all
 
 
-def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> SubscriptInfoFromShape:
+def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...], names: str | None = None) -> SubscriptInfoFromShape:
     """
     Parse variable subscript ndims by solving linear equations.
 
@@ -298,6 +320,8 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         4. "..." is replaced with "*.".]
     ndims : Sequence[int]
         The number of dimensions for each operand.
+    names : str | None
+        The names of operands separated by ",",, used for error messages. If None, operand indices are used instead.
 
     Returns
     -------
@@ -330,11 +354,19 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     ...     check_shapes("*ij", ())
 
     Does not match:
-
-    >>> check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
+    >>> x = (1, 4)
+    >>> check_shapes("ij,*k*l,*li", x, (5, 6), (1,7,3))
 
     """
     info_all = _parse_shapes(subscripts, *operands)
+    if names is not None:
+        names_ = [str(name) for name in names.split(",")]
+        if len(names_) != len(info_all):
+            raise ValueError(
+                f"Number of names ({len(names_)}) does not match number of operands ({len(info_all)})"
+            )
+    else:
+        names_ = [str(i) for i in range(len(info_all))]
     info_flatten_keyed = [(i, item) for i, info_array in enumerate(info_all) for item in info_array]
     errors = []
     shape_broadcasted = {}
@@ -344,7 +376,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         try:
             shape_broadcasted[key] = np.broadcast_shapes(*shapes)
         except ValueError:
-            inner_text = ", ".join([f"{shape} ({i})" for i, shape in group_list])
+            inner_text = ", ".join([f"{shape} ({names_[i]})" for i, shape in group_list])
             errors.append(f"Key {key}: shapes {inner_text} are not broadcastable")
 
     info_all_new = ()

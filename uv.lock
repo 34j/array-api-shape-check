@@ -65,7 +65,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "attrs", specifier = ">=26.1.0" },
+    { name = "attrs", specifier = ">=26.1" },
     { name = "more-itertools", specifier = ">=11.0.2" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "types-array-api", specifier = ">=1.1.4" },
