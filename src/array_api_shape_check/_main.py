@@ -36,11 +36,23 @@ class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
     shape_broadcasted: tuple[int, ...]
     """The shape after broadcasting with other subscripts with the same name"""
 
+    def __repr__(self) -> str:
+        if self.is_variable:
+            return f"*{self.name}:{self.shape_broadcasted}"
+        else:
+            return f"{self.name}:{self.shape_broadcasted[0]}"
+
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
     shape_broadcasted: tuple[int, ...]
     """The shape after broadcasting with other subscripts with the same name"""
+
+    def __repr__(self) -> str:
+        if self.is_variable:
+            return f"*{self.name}:{self.shape_current}≦{self.shape_broadcasted}"
+        else:
+            return f"{self.name}:{self.shape_current[0]}"
 
 
 @attrs.frozen(kw_only=True)
@@ -53,7 +65,7 @@ class SubscriptInfoFromShape:
     sorted lexicographically by name"""
 
 
-def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
+def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
     """
     Parse subscripts str.
 
@@ -80,7 +92,7 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     Examples
     --------
     >>> parse_subscripts("ij,*k*l,*li")
-    SubscriptInfoFromSubcript(all=((i, j, *k, *l, *l, i),), unique=(i, j, *k, *l))
+    SubscriptInfoFromSubcript(all=((i, j), (*k, *l), (*l, i)), unique=(i, j, *k, *l))
 
     """
     # If . other than ...
@@ -90,22 +102,18 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     subscripts = re.sub(r"\.\.\.", "*.", subscripts)
     subscripts = subscripts.rstrip()
     info_all: tuple[tuple[SubscriptInfoFromSubcriptItem, ...], ...] = ()
-    info_array: tuple[SubscriptInfoFromSubcriptItem, ...] = ()
     for name_ in subscripts.split(","):
+        info_array: tuple[SubscriptInfoFromSubcriptItem, ...] = ()
         is_variable = False
         for name in name_:
-            if name == ",":
-                info_all += (tuple(info_array),)
-                info_array = ()
-            elif name == "*":
+            if name == "*":
                 if is_variable:
                     raise ValueError("Invalid subscript: '*' cannot be repeated")
                 is_variable = True
             else:
                 info_array += (SubscriptInfoFromSubcriptItem(name=name, is_variable=is_variable),)
                 is_variable = False
-    else:
-        info_all += (tuple(info_array),)
+        info_all += (info_array,)
 
     info_unique: set[SubscriptInfoFromSubcriptItem] = {
         x for info_array in info_all for x in info_array
@@ -124,14 +132,50 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     )
 
 
-def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]:
+def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, int]:
+    """
+    Parse variable subscript ndims by solving linear equations.
+
+    Parameters
+    ----------
+    subscripts : str
+        Subscripts separated by "," per operand.
+
+        1. Subscripts must be of length 1
+        2. Subscripts must not be "*" or ".".
+        3. If start with "*", the subscript is treated as variable.
+        4. "..." is replaced with "*.".]
+    ndims : Sequence[int]
+        The number of dimensions for each operand.
+
+    Returns
+    -------
+    SubscriptInfoFromSubcript
+        The parsed subscript info.
+
+    Raises
+    ------
+    ValueError
+        If the subscript is invalid.
+
+    Examples
+    --------
+    >>> parse_variable_ndim("ij,*k*l,*li", (2,4,4))
+    {'k': 2, 'l': 2}
+
+    """
     info = parse_subscripts(subscripts)
     del subscripts
+    if len(info.all) != len(ndims):
+        raise ValueError(
+            f"Number of subscripts ({len(info.all)}) does not match number of ndims ({len(ndims)})"
+        )
 
     # decide dimensions by solving linear equations
-    if len(info.unique) > len(info.all):
+    info_variable_unique = [subscript for subscript in info.unique if subscript.is_variable]
+    if len(info_variable_unique) > len(info.all):
         raise ValueError(
-            f"The number of unique subscripts ({len(info.unique)}) "
+            f"The number of unique subscripts ({len(info_variable_unique)}) "
             "is greater than "
             f"the number of operands ({len(info.all)}), "
             "making it impossible to assume "
@@ -140,31 +184,31 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]
         )
     rhs = np.asarray(ndims, dtype=int)
     del ndims
-    subscripts_variable_unique = [subscript for subscript in info.unique if subscript.is_variable]
-    mat = np.zeros((len(info.unique), len(subscripts_variable_unique)), dtype=int)
+    mat = np.zeros((len(info.unique), len(info_variable_unique)), dtype=int)
     for i, info_array in enumerate(info.all):
         for subscript in info_array:
             if subscript.is_variable:
-                j = subscripts_variable_unique.index(subscript)
+                j = info_variable_unique.index(subscript)
                 mat[i, j] += 1
             else:
                 rhs[i] -= 1
 
     # solve overdetermined linear equations using least squares method
     variable_dims, residuals, _rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
-    print(variable_dims, residuals, _rank, _singular_values)
+    if _rank != len(info_variable_unique):
+        raise ValueError(
+            "Inconsistent ndims: there are not enough informations to determine the number of dimensions for variable subscripts"
+        )
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
         raise ValueError(
-            "Inconsistent ndims: cannot determine the number of dimensions for variable subscripts"
+            "Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts"
         )
     variable_dims = np.round(variable_dims).astype(int)
     if np.any(variable_dims < 0):
         raise ValueError(
             "Inconsistent ndims: number of dimensions for variable subscripts cannot be negative"
         )
-    return {
-        subscript.name: variable_dims[j] for j, subscript in enumerate(subscripts_variable_unique)
-    }
+    return {subscript.name: variable_dims[j] for j, subscript in enumerate(info_variable_unique)}
 
 
 def parse_shapes(
