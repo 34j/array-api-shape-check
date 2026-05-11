@@ -1,4 +1,4 @@
-from array_api_shape_check.main import add
+from array_api_shape_check._main import add
 
 
 def test_add():
