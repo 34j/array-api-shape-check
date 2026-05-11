@@ -19,17 +19,21 @@ class SubscriptInfoFromSubcript:
     unique: set[SubscriptInfoFromSubcriptItem]
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItemTemp(SubscriptInfoFromSubcriptItem):
+class SubscriptInfoFromShapeItemFail(SubscriptInfoFromSubcriptItem):
     shape_current: tuple[int, ...]
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemTemp):
+class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemFail):
+    shape_broadcasted: tuple[int, ...]
+
+@attrs.frozen(kw_only=True)
+class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
     shape_broadcasted: tuple[int, ...]
 
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
-    unique: set[SubscriptInfoFromShapeItemTemp]
+    unique: set[SubscriptInfoFromShapeItemFail]
 
 def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     # If . other than ...
@@ -93,7 +97,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]
     return {subscript.name: variable_dims[j] for j, subscript in enumerate(subscripts_variable_unique)}
     
 
-def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> None | SubscriptInfo:
+def parse_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> tuple[tuple[SubscriptInfoFromShapeItemFail, ...], ...]:
     info = parse_subscripts(subscripts)
     if len(info.all) != len(operands):
         raise ValueError(f"Number of subscripts ({len(info.all)}) does not match number of operands ({len(operands)})")
@@ -113,12 +117,13 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> None
     ndims = [len(shape) for shape in shapes]
     name_to_ndim = defaultdict(lambda: 1, parse_variable_ndim(subscripts, ndims))
     del subscripts, ndims
-    name_to_shapes: dict[str, dict[int, tuple[int, ...]]] = defaultdict(dict)
-    info_all: tuple[tuple[SubscriptInfoFromShapeItemTemp, ...], ...] = ()
+    info_all: tuple[tuple[SubscriptInfoFromShapeItemFail, ...], ...] = ()
     for info_array, shape in zip(info.all, shapes):
         info_array_new = ()
         for item in info_array:
-            info_array_new += (SubscriptInfoFromShapeItemTemp(name=item.name, is_variable=item.is_variable, shape_current=shape[name_to_ndim[item.name]:]),)
+            info_array_new += (SubscriptInfoFromShapeItemFail(name=item.name, is_variable=item.is_variable, shape_current=shape[name_to_ndim[item.name]:]),)
+        info_all += (info_array_new,)
+    return info_all
     
 
 
