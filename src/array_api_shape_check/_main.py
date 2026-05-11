@@ -74,6 +74,23 @@ class SubscriptInfoFromShape:
     ignoring order and shapes not broadcasted,
     sorted lexicographically by name"""
 
+class InconsistentNdimError(ValueError):
+    pass
+
+class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
+    def __init__(self, *args: object) -> None:
+        super().__init__("Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts", *args)
+
+class InconsistentNdimErrorNoSolutions(InconsistentNdimError):
+    def __init__(self, *args: object) -> None:
+        super().__init__("Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts", *args)
+
+class InconsistentShapeError(ValueError):
+    subscript_info: SubscriptInfoFromShape
+    def __init__(self, subscript_info: SubscriptInfoFromShape, *args: object) -> None:
+        super().__init__("Inconsistent shapes: " + str(subscript_info.all), *args)
+        self.subscript_info = subscript_info
+
 
 def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
     """
@@ -176,15 +193,17 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     Not enough infomation to determine variable subscript ndims:
 
     >>> import pytest
-    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
     ...     parse_variable_ndim("*i*j", (2,))
-    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
     ...     parse_variable_ndim("*i*j,*i*j", (2, 2))
 
     No solution to determine variable subscript ndims:
 
-    >>> with pytest.raises(ValueError, match="no solution"):
+    >>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="residuals"):
     ...     parse_variable_ndim("*i,*i", (2, 3))
+    >>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="negative"):
+    ...     parse_variable_ndim("*ij", (0,))
 
     """
     info = parse_subscripts(subscripts)
@@ -197,9 +216,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     # decide dimensions by solving linear equations
     info_variable_unique = [subscript for subscript in info.unique if subscript.is_variable]
     if len(info_variable_unique) > len(info.all):
-        raise ValueError(
-            "Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts"
-        )
+        raise InconsistentNdimErrorMultipleSolutions("number of variables")
     rhs = np.asarray(ndims, dtype=int)
     del ndims
     mat = np.zeros((len(info.all), len(info_variable_unique)), dtype=int)
@@ -214,18 +231,12 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     # solve overdetermined linear equations using least squares method
     variable_dims, residuals, _rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
     if _rank != len(info_variable_unique):
-        raise ValueError(
-            "Inconsistent ndims: there are multiple possible solutions to determine the number of dimensions for variable subscripts"
-        )
+        raise InconsistentNdimErrorMultipleSolutions("rank")
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
-        raise ValueError(
-            "Inconsistent ndims: there are no solution to determine the number of dimensions for variable subscripts"
-        )
+        raise InconsistentNdimErrorNoSolutions("residuals")
     variable_dims = np.round(variable_dims).astype(int)
     if np.any(variable_dims < 0):
-        raise ValueError(
-            "Inconsistent ndims: number of dimensions for variable subscripts cannot be negative"
-        )
+        raise InconsistentNdimErrorNoSolutions("negative")
     return {subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)}
 
 
@@ -306,19 +317,21 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     Not enough infomation to determine variable subscript ndims:
 
     >>> import pytest
-    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="number of variables"):
     ...     check_shapes("*i*j", (1,1,))
-    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    >>> with pytest.raises(InconsistentNdimErrorMultipleSolutions, match="rank"):
     ...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
 
     No solution to determine variable subscript ndims:
 
-    >>> with pytest.raises(ValueError, match="no solution"):
+    >>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="residuals"):
     ...     check_shapes("*i,*i", (1, 1), (1, 1, 1))
+    >>> with pytest.raises(InconsistentNdimErrorNoSolutions, match="negative"):
+    ...     check_shapes("*ij", ())
 
     Does not match:
 
-    >>> with pytest.raises(ValueError, match="Inconsistent shapes"):
+    >>> with pytest.raises(InconsistentShapeError, match="Inconsistent shapes"):
     ...     check_shapes("ij,*k*l,*li", (1,4), (5,6), (1,7,3))
 
     """
@@ -363,6 +376,6 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     )
 
     if errors:
-        raise ValueError(f"Inconsistent shapes: {result.all}\n" + "/n".join(errors))
+        raise InconsistentShapeError(result, *errors)
     
     return result
