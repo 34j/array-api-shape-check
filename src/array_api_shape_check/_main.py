@@ -23,7 +23,7 @@ class SubscriptInfoFromSubcriptItem:
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromSubcript:
     all: tuple[tuple[SubscriptInfoFromSubcriptItem, ...], ...]
-    unique: tuple[SubscriptInfoFromSubcriptItem, ...]
+    unique: dict[str, SubscriptInfoFromSubcriptItem]
 
 
 @attrs.frozen(kw_only=True)
@@ -70,7 +70,7 @@ class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
     """The subscript info grouped by order, then by operand"""
-    unique: tuple[SubscriptInfoFromShapeItemUnique, ...]
+    unique: dict[str, SubscriptInfoFromShapeItemUnique]
     """The unique subscripts,
     ignoring order and shapes not broadcasted,
     sorted lexicographically by name"""
@@ -157,8 +157,11 @@ def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
 
     Examples
     --------
-    >>> parse_subscripts("ij,*k*l,*li")
-    SubscriptInfoFromSubcript(all=((i, j), (*k, *l), (*l, i)), unique=(i, j, *k, *l))
+    >>> info = parse_subscripts("ij,*k*l,*li")
+    >>> info.all
+    ((i, j), (*k, *l), (*l, i))
+    >>> info.unique
+    {'i': i, 'j': j, 'k': *k, 'l': *l}
 
     """
     # If . other than ...
@@ -181,9 +184,9 @@ def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
                 is_variable = False
         info_all += (info_array,)
 
-    info_unique: set[SubscriptInfoFromSubcriptItem] = {
-        x for info_array in info_all for x in info_array
-    }
+    info_unique = tuple(
+        sorted({x for info_array in info_all for x in info_array}, key=lambda x: x.name)
+    )
     # raise if there are subscripts with same name but different is_variable
     names = set()
     for info in info_unique:
@@ -193,9 +196,7 @@ def parse_subscripts(subscripts: str, /) -> SubscriptInfoFromSubcript:
             )
         names.add(info.name)
 
-    return SubscriptInfoFromSubcript(
-        all=info_all, unique=tuple(sorted(info_unique, key=lambda x: x.name))
-    )
+    return SubscriptInfoFromSubcript(all=info_all, unique={item.name: item for item in info_unique})
 
 
 def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, int]:
@@ -253,7 +254,9 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
         )
 
     # decide dimensions by solving linear equations
-    info_variable_unique = [subscript for subscript in info.unique if subscript.is_variable]
+    info_variable_unique = [
+        subscript for subscript in info.unique.values() if subscript.is_variable
+    ]
     if len(info_variable_unique) > len(info.all):
         raise InconsistentNdimErrorMultipleSolutions("number of variables")
     rhs = np.asarray(ndims, dtype=int)
@@ -363,7 +366,7 @@ def check_shapes(
     >>> info.all
     ((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3))
     >>> info.unique
-    (i:3, j:4, *k:(5,), *l:(6, 7))
+    {'i': i:3, 'j': j:4, 'k': *k:(5,), 'l': *l:(6, 7)}
 
     Internally `check_shapes()` calls `parse_variable_ndim()`,
     which determines the number of dimensions for variable subscripts by least squares.
@@ -448,7 +451,8 @@ def check_shapes(
         for item in info_array
     }
     result = SubscriptInfoFromShape(
-        all=info_all_new, unique=tuple(sorted(info_unique, key=lambda x: x.name))
+        all=info_all_new,
+        unique={item.name: item for item in sorted(info_unique, key=lambda x: x.name)},
     )
 
     if errors:

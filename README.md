@@ -54,7 +54,7 @@ Install this via pip (or your favourite package manager):
 >>> info.all
 ((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3))
 >>> info.unique
-(i:3, j:4, *k:(5,), *l:(6, 7))
+{'i': i:3, 'j': j:4, 'k': *k:(5,), 'l': *l:(6, 7)}
 ```
 
 Internally `check_shapes()` calls `parse_variable_ndim()`, which determines the number of dimensions for variable subscripts by least squares. If this is successful, checks if each subscript is consistent, then finnaly raises error for all inconsistencies at once.
