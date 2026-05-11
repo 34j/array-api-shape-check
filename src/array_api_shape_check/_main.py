@@ -49,6 +49,30 @@ class SubscriptInfoFromShape:
 
 
 def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
+    """
+    Parse subscripts str.
+
+    Parameters
+    ----------
+    subscripts : str
+        Subscripts separated by "," per operand.
+
+        1. Subscripts must be of length 1
+        2. Subscripts must not be "*" or ".".
+        3. If start with "*", the subscript is treated as variable.
+        4. "..." is replaced with "*.".
+
+    Returns
+    -------
+    SubscriptInfoFromSubcript
+        The parsed subscript info.
+
+    Raises
+    ------
+    ValueError
+        If the subscript is invalid.
+
+    """
     # If . other than ...
     if re.search(r"(?<!\.)\.(?!\.)", subscripts):
         raise ValueError("Invalid subscript: '.' is not allowed except for '...'")
@@ -63,6 +87,8 @@ def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
             info_all += (tuple(info_array),)
             info_array = ()
         elif name == "*":
+            if is_variable:
+                raise ValueError("Invalid subscript: '*' cannot be repeated")
             is_variable = True
             continue
         else:
