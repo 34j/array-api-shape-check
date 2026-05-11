@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 (2026-05-11)
+
+### Bug fixes
+
+- Use dict instead of tuple in unique ([`37e2643`](https://github.com/34j/array-api-shape-check/commit/37e2643dd3ff06fc3c37d123a16ad45271a1c06d))
+
 ## v0.1.1 (2026-05-11)
 
 ### Bug fixes
