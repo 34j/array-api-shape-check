@@ -176,14 +176,14 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     Not enough infomation to determine variable subscript ndims:
 
     >>> import pytest
-    >>> with pytest.raises(ValueError):
+    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
     ...     parse_variable_ndim("*i*j", (2,))
-    >>> with pytest.raises(ValueError):
+    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
     ...     parse_variable_ndim("*i*j,*i*j", (2, 2))
 
     No solution to determine variable subscript ndims:
 
-    >>> with pytest.raises(ValueError):
+    >>> with pytest.raises(ValueError, match="no solution"):
     ...     parse_variable_ndim("*i,*i", (2, 3))
 
     """
@@ -306,15 +306,15 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     Not enough infomation to determine variable subscript ndims:
 
     >>> import pytest
-    >>> with pytest.raises(ValueError):
-    ...     parse_variable_ndim("*i*j", (2,))
-    >>> with pytest.raises(ValueError):
-    ...     parse_variable_ndim("*i*j,*i*j", (2, 2))
+    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    ...     check_shapes("*i*j", (1,1,))
+    >>> with pytest.raises(ValueError, match="multiple possible solutions"):
+    ...     check_shapes("*i*j,*i*j", (1, 1), (1, 1))
 
     No solution to determine variable subscript ndims:
 
-    >>> with pytest.raises(ValueError):
-    ...     parse_variable_ndim("*i,*i", (2, 3))
+    >>> with pytest.raises(ValueError, match="no solution"):
+    ...     check_shapes("*i,*i", (1, 1), (1, 1, 1))
 
     """
     info_all = _parse_shapes(subscripts, *operands)
