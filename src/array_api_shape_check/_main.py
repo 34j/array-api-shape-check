@@ -8,6 +8,7 @@ import re
 import attrs
 import numpy as np
 
+from itertools import groupby
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromSubcriptItem:
     name: str
@@ -19,11 +20,11 @@ class SubscriptInfoFromSubcript:
     unique: set[SubscriptInfoFromSubcriptItem]
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItemFail(SubscriptInfoFromSubcriptItem):
+class SubscriptInfoFromShapeItemUnchecked(SubscriptInfoFromSubcriptItem):
     shape_current: tuple[int, ...]
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemFail):
+class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
     shape_broadcasted: tuple[int, ...]
 
 @attrs.frozen(kw_only=True)
@@ -33,7 +34,7 @@ class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
 @attrs.frozen(kw_only=True)
 class SubscriptInfoFromShape:
     all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
-    unique: set[SubscriptInfoFromShapeItemFail]
+    unique: set[SubscriptInfoFromShapeItemUnchecked]
 
 def parse_subscripts(subscripts: str) -> SubscriptInfoFromSubcript:
     # If . other than ...
@@ -97,7 +98,7 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int]) -> dict[str, int]
     return {subscript.name: variable_dims[j] for j, subscript in enumerate(subscripts_variable_unique)}
     
 
-def parse_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> tuple[tuple[SubscriptInfoFromShapeItemFail, ...], ...]:
+def parse_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> tuple[tuple[SubscriptInfoFromShapeItemUnchecked, ...], ...]:
     info = parse_subscripts(subscripts)
     if len(info.all) != len(operands):
         raise ValueError(f"Number of subscripts ({len(info.all)}) does not match number of operands ({len(operands)})")
@@ -117,14 +118,34 @@ def parse_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> tupl
     ndims = [len(shape) for shape in shapes]
     name_to_ndim = defaultdict(lambda: 1, parse_variable_ndim(subscripts, ndims))
     del subscripts, ndims
-    info_all: tuple[tuple[SubscriptInfoFromShapeItemFail, ...], ...] = ()
+    info_all: tuple[tuple[SubscriptInfoFromShapeItemUnchecked, ...], ...] = ()
     for info_array, shape in zip(info.all, shapes):
         info_array_new = ()
         for item in info_array:
-            info_array_new += (SubscriptInfoFromShapeItemFail(name=item.name, is_variable=item.is_variable, shape_current=shape[name_to_ndim[item.name]:]),)
+            info_array_new += (SubscriptInfoFromShapeItemUnchecked(name=item.name, is_variable=item.is_variable, shape_current=shape[name_to_ndim[item.name]:]),)
         info_all += (info_array_new,)
     return info_all
     
-
-
-        
+def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> SubscriptInfoFromShape:
+    info_all = parse_shapes(subscripts, *operands)
+    info_flatten_keyed = [(i, item) for i, info_array in enumerate(info_all) for item in info_array]
+    errors = []
+    for key, group in groupby(info_flatten_keyed, key=lambda x: x[1].name):
+        group_list = list(group)
+        shapes = [item.shape_current for _, item in group_list]
+        try:
+            shape_broadcasted = np.broadcast_shapes(*shapes)
+        except ValueError:
+            errors.append(ValueError(f"Key {key}: shapes {''.join([f"{shape} ({i})" for i, shape in group_list])} are not broadcastable"))
+    if errors:
+        raise ExceptionGroup("Shape check failed", errors)
+    
+    info_all_new = ()
+    for info_array in info_all:
+        info_array_new = ()
+        for item in info_array:
+            shape_broadcasted = np.broadcast_shapes(item.shape_current, ())
+            info_array_new += (SubscriptInfoFromShapeItem(name=item.name, is_variable=item.is_variable, shape_current=item.shape_current, shape_broadcasted=shape_broadcasted),)
+        info_all_new += (info_array_new,)
+    info_unique = set([SubscriptInfoFromShapeItemUnchecked(name=item.name, is_variable=item.is_variable, shape_current=item.shape_current) for info_array in info_all_new for item in info_array])
+    return SubscriptInfoFromShape(all=info_all_new, unique=info_unique)
