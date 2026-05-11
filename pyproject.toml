@@ -18,23 +18,21 @@ classifiers = [
   "Natural Language :: English",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries",
 ]
+dependencies = [
+  "attrs>=26.1",
+  "more-itertools>=11.0.2",
+  "numpy>=2.4.4",
+  "types-array-api>=1.1.4",
+]
 urls."Bug Tracker" = "https://github.com/34j/array-api-shape-check/issues"
 urls.Changelog = "https://github.com/34j/array-api-shape-check/blob/main/CHANGELOG.md"
 urls.documentation = "https://array-api-shape-check.readthedocs.io"
 urls.repository = "https://github.com/34j/array-api-shape-check"
-dependencies = [
-    "attrs>=26.1.0",
-    "more-itertools>=11.0.2",
-    "numpy>=2.4.4",
-    "types-array-api>=1.1.4",
-]
 
 [dependency-groups]
 dev = [
@@ -53,7 +51,7 @@ docs = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 lint.select = [
   "B",   # flake8-bugbear
   "C4",  # flake8-comprehensions

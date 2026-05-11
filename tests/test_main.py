@@ -1,6 +1,5 @@
-from array_api_shape_check._main import add
+from array_api_shape_check import check_shapes
 
 
-def test_add():
-    """Adding two number works as expected."""
-    assert add(1, 1) == 2
+def test():
+    check_shapes("...", (2, 3))
