@@ -30,9 +30,15 @@ class SubscriptInfoFromShapeItemUnchecked(SubscriptInfoFromSubcriptItem):
     shape_current: tuple[int, ...]
     """The shape of the operand corresponding to this subscript"""
 
+    def __repr__(self) -> str:
+        if self.is_variable:
+            return f"*{self.name}:{self.shape_current}"
+        else:
+            return f"{self.name}:{self.shape_current[0]}"
+
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
+class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromSubcriptItem):
     shape_broadcasted: tuple[int, ...]
     """The shape after broadcasting with other subscripts with the same name"""
 
@@ -44,14 +50,18 @@ class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
 
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromShapeItem):
+class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
     shape_broadcasted: tuple[int, ...]
     """The shape after broadcasting with other subscripts with the same name"""
 
     def __repr__(self) -> str:
         if self.is_variable:
-            return f"*{self.name}:{self.shape_current}≦{self.shape_broadcasted}"
+            if self.shape_current != self.shape_broadcasted:
+                return f"*{self.name}:{self.shape_current}->{self.shape_broadcasted}"
+            return f"*{self.name}:{self.shape_current}"
         else:
+            if self.shape_current != self.shape_broadcasted:
+                return f"{self.name}:{self.shape_current[0]}->{self.shape_broadcasted[0]}"
             return f"{self.name}:{self.shape_current[0]}"
 
 
@@ -254,9 +264,10 @@ def _parse_shapes(
                 SubscriptInfoFromShapeItemUnchecked(
                     name=item.name,
                     is_variable=item.is_variable,
-                    shape_current=shape[name_to_ndim[item.name] :],
+                    shape_current=shape[:name_to_ndim[item.name]],
                 ),
             )
+            shape = shape[name_to_ndim[item.name]:]
         info_all += (info_array_new,)
     return info_all
 
@@ -290,6 +301,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     Examples
     --------
     >>> check_shapes("ij,*k*l,*li", (1,4), (5,6,7), (1,7,3))
+    SubscriptInfoFromShape(all=((i:1->3, j:4), (*k:(5,), *l:(6, 7)), (*l:(1, 7)->(6, 7), i:3)), unique=(i:3, j:4, *k:(5,), *l:(6, 7)))
 
     Not enough infomation to determine variable subscript ndims:
 
@@ -316,7 +328,7 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
             shape_broadcasted[key] = np.broadcast_shapes(*shapes)
         except ValueError:
             inner_text = "".join([f"{shape} ({i})" for i, shape in group_list])
-            errors.append("Key {key}: shapes {inner_text} are not broadcastable")
+            errors.append(f"Key {key}: shapes {inner_text} are not broadcastable")
 
     info_all_new = ()
     for info_array in info_all:
@@ -333,10 +345,10 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
         info_all_new += (info_array_new,)
 
     info_unique = {
-        SubscriptInfoFromShapeItemUnchecked(
+        SubscriptInfoFromShapeItemUnique(
             name=item.name,
             is_variable=item.is_variable,
-            shape_current=item.shape_current,
+            shape_broadcasted=shape_broadcasted.get(item.name) # type: ignore
         )
         for info_array in info_all_new
         for item in info_array
@@ -346,6 +358,6 @@ def check_shapes(subscripts: str, /, *operands: Array | tuple[int, ...]) -> Subs
     )
 
     if errors:
-        raise ValueError(f"Shape check failed: {result}" + "/n".join(errors))
+        raise ValueError(f"Shape check failed: {result.all}\n" + "/n".join(errors))
     
     return result
