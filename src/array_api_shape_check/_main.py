@@ -77,26 +77,38 @@ class SubscriptInfoFromShape:
 
 
 class InconsistentNdimError(ValueError):
-    pass
+    shapes: Sequence[int] | None
+    ndims: Sequence[int]
+    reason: str
 
 
 class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
-    def __init__(self, reason: str, *args: object) -> None:
+    def __init__(
+        self, ndims: Sequence[int], reason: str, shapes: Sequence[int] | None = None
+    ) -> None:
+        self.ndims = ndims
+        self.reason = reason
+        self.shapes = shapes
         super().__init__(
             f"Inconsistent ndims: there are multiple possible solutions "
             "to determine the number of dimensions "
-            f"for variable subscripts [{reason}]",
-            *args,
+            f"for variable subscripts [{reason}]"
+            f"\nndims: {ndims}" + (f"\nshapes: {shapes}" if shapes is not None else "")
         )
 
 
 class InconsistentNdimErrorNoSolutions(InconsistentNdimError):
-    def __init__(self, reason: str, *args: object) -> None:
+    def __init__(
+        self, ndims: Sequence[int], reason: str, shapes: Sequence[int] | None = None
+    ) -> None:
+        self.ndims = ndims
+        self.reason = reason
+        self.shapes = shapes
         super().__init__(
             f"Inconsistent ndims: there are no solution "
             f"to determine the number of dimensions "
-            f"for variable subscripts [{reason}]",
-            *args,
+            f"for variable subscripts [{reason}]"
+            f"\nndims: {ndims}" + (f"\nshapes: {shapes}" if shapes is not None else "")
         )
 
 
@@ -258,9 +270,8 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
         subscript for subscript in info.unique.values() if subscript.is_variable
     ]
     if len(info_variable_unique) > len(info.all):
-        raise InconsistentNdimErrorMultipleSolutions("number of variables")
+        raise InconsistentNdimErrorMultipleSolutions(ndims, "number of variables")
     rhs = np.asarray(ndims, dtype=int)
-    del ndims
     mat = np.zeros((len(info.all), len(info_variable_unique)), dtype=int)
     for i, info_array in enumerate(info.all):
         for subscript in info_array:
@@ -273,19 +284,19 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     # solve overdetermined linear equations using least squares method
     variable_dims, residuals, rank, _singular_values = np.linalg.lstsq(mat, rhs, rcond=None)
     if rank != len(info_variable_unique):
-        raise InconsistentNdimErrorMultipleSolutions("rank")
+        raise InconsistentNdimErrorMultipleSolutions(ndims, "rank")
     if residuals.size > 0 and not np.isclose(residuals[0], 0):
-        raise InconsistentNdimErrorNoSolutions("residuals")
+        raise InconsistentNdimErrorNoSolutions(ndims, "residuals")
     variable_dims = np.round(variable_dims).astype(int)
     if np.any(variable_dims < 0):
-        raise InconsistentNdimErrorNoSolutions("negative")
+        raise InconsistentNdimErrorNoSolutions(ndims, "negative")
     return {
         subscript.name: int(variable_dims[j]) for j, subscript in enumerate(info_variable_unique)
     }
 
 
 def _parse_shapes(
-    subscripts: str, /, *operands: Array | tuple[int, ...]
+    subscripts: str, /, *operands: Array | tuple[int | None, ...]
 ) -> tuple[tuple[SubscriptInfoFromShapeItemUnchecked, ...], ...]:
     info = parse_subscripts(subscripts)
     if len(info.all) != len(operands):
@@ -309,7 +320,10 @@ def _parse_shapes(
         shapes += (shape,)  # type: ignore
     del operands
     ndims = [len(shape) for shape in shapes]
-    name_to_ndim = defaultdict(lambda: 1, parse_variable_ndim(subscripts, ndims))
+    try:
+        name_to_ndim = defaultdict(lambda: 1, parse_variable_ndim(subscripts, ndims))
+    except InconsistentNdimError as e:
+        raise type(e)(e.ndims, e.reason, shapes) from e
     del subscripts, ndims
     info_all: tuple[tuple[SubscriptInfoFromShapeItemUnchecked, ...], ...] = ()
     for info_array, shape in zip(info.all, shapes, strict=False):
@@ -328,7 +342,7 @@ def _parse_shapes(
 
 
 def check_shapes(
-    subscripts: str, /, *operands: Array | tuple[int, ...], names: str | None = None
+    subscripts: str, /, *operands: Array | tuple[int | None, ...], names: str | None = None
 ) -> SubscriptInfoFromShape:
     """
     Parse variable subscript ndims by solving linear equations.
