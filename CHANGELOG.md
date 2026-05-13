@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.3 (2026-05-13)
+
+### Bug fixes
+
+- More helpful errors ([`f87c862`](https://github.com/34j/array-api-shape-check/commit/f87c862420435e07dfc3593979f399e73dd4ba94))
+
 ## v0.1.2 (2026-05-11)
 
 ### Bug fixes
