@@ -1,8 +1,9 @@
+import inspect
 import re
 from collections import defaultdict
 from collections.abc import Sequence
 from itertools import groupby
-from typing import Any
+from typing import Any, cast
 
 import attrs
 import numpy as np
@@ -34,8 +35,7 @@ class SubscriptInfoFromShapeItemUnchecked(SubscriptInfoFromSubcriptItem):
     def __repr__(self) -> str:
         if self.is_variable:
             return f"*{self.name}:{self.shape_current}"
-        else:
-            return f"{self.name}:{self.shape_current[0]}"
+        return f"{self.name}:{self.shape_current[0]}"
 
 
 @attrs.frozen(kw_only=True)
@@ -46,8 +46,7 @@ class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromSubcriptItem):
     def __repr__(self) -> str:
         if self.is_variable:
             return f"*{self.name}:{self.shape_broadcasted}"
-        else:
-            return f"{self.name}:{self.shape_broadcasted[0]}"
+        return f"{self.name}:{self.shape_broadcasted[0]}"
 
 
 @attrs.frozen(kw_only=True)
@@ -60,10 +59,9 @@ class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
             if self.shape_current != self.shape_broadcasted:
                 return f"*{self.name}:{self.shape_current}->{self.shape_broadcasted}"
             return f"*{self.name}:{self.shape_current}"
-        else:
-            if self.shape_current != self.shape_broadcasted:
-                return f"{self.name}:{self.shape_current[0]}->{self.shape_broadcasted[0]}"
-            return f"{self.name}:{self.shape_current[0]}"
+        if self.shape_current != self.shape_broadcasted:
+            return f"{self.name}:{self.shape_current[0]}->{self.shape_broadcasted[0]}"
+        return f"{self.name}:{self.shape_current[0]}"
 
 
 @attrs.frozen(kw_only=True)
@@ -82,7 +80,7 @@ class InconsistentNdimError(ValueError):
     reason: str
 
 
-class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
+class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):  # noqa: N818
     def __init__(
         self, ndims: Sequence[int], reason: str, shapes: Sequence[int] | None = None
     ) -> None:
@@ -97,7 +95,7 @@ class InconsistentNdimErrorMultipleSolutions(InconsistentNdimError):
         )
 
 
-class InconsistentNdimErrorNoSolutions(InconsistentNdimError):
+class InconsistentNdimErrorNoSolutions(InconsistentNdimError):  # noqa: N818
     def __init__(
         self, ndims: Sequence[int], reason: str, shapes: Sequence[int] | None = None
     ) -> None:
@@ -121,8 +119,6 @@ class InconsistentShapeError(ValueError):
 
 
 def _get_operand_names(*operands: Any) -> list[str | None]:
-    import inspect
-
     frame = inspect.currentframe()
     if frame is None:
         return [None] * len(operands)
@@ -236,6 +232,10 @@ def parse_variable_ndim(subscripts: str, ndims: Sequence[int], /) -> dict[str, i
     ------
     ValueError
         If the subscript is invalid.
+    InconsistentNdimErrorMultipleSolutions
+        If the variable dimensions cannot be uniquely determined.
+    InconsistentNdimErrorNoSolutions
+        If the variable dimensions have no valid solution.
 
     Examples
     --------
@@ -306,18 +306,19 @@ def _parse_shapes(
         )
     shapes: tuple[tuple[int, ...], ...] = ()
     for operand in operands:
-        shape: tuple[int, ...]  # type: ignore
         if isinstance(operand, tuple):
-            shape = operand
+            if None in operand:
+                raise ValueError("Operand shape cannot contain None")
+            shape = cast("tuple[int, ...]", operand)
         elif hasattr(operand, "shape"):
             if None in operand.shape:
                 raise ValueError("Operand shape cannot contain None")
-            shape = operand.shape
+            shape = cast("tuple[int, ...]", operand.shape)
         else:
             raise TypeError(
                 f"Invalid operand: expected an array or a shape tuple, but got {type(operand)}"
             )
-        shapes += (shape,)  # type: ignore
+        shapes += (shape,)
     del operands
     ndims = [len(shape) for shape in shapes]
     try:
@@ -336,7 +337,7 @@ def _parse_shapes(
                     shape_current=shape[: name_to_ndim[item.name]],
                 ),
             )
-            shape = shape[name_to_ndim[item.name] :]
+            shape = shape[name_to_ndim[item.name] :]  # noqa: PLW2901
         info_all += (info_array_new,)
     return info_all
 
@@ -373,6 +374,8 @@ def check_shapes(
     ------
     ValueError
         If the subscript is invalid.
+    InconsistentShapeError
+        If the operand shapes are inconsistent.
 
     Examples
     --------
@@ -450,7 +453,7 @@ def check_shapes(
                     name=item.name,
                     is_variable=item.is_variable,
                     shape_current=item.shape_current,
-                    shape_broadcasted=shape_broadcasted.get(item.name),  # type: ignore
+                    shape_broadcasted=shape_broadcasted[item.name],
                 ),
             )
         info_all_new += (info_array_new,)
@@ -459,7 +462,7 @@ def check_shapes(
         SubscriptInfoFromShapeItemUnique(
             name=item.name,
             is_variable=item.is_variable,
-            shape_broadcasted=shape_broadcasted.get(item.name),  # type: ignore
+            shape_broadcasted=shape_broadcasted[item.name],
         )
         for info_array in info_all_new
         for item in info_array

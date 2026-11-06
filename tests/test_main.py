@@ -1,4 +1,4 @@
-from array_api_shape_check._main import _get_operand_names
+from array_api_shape_check._main import _get_operand_names  # noqa: PLC2701
 
 
 def test_get_operand_names():
