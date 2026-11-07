@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0 (2026-11-06)
+
+### Features
+
+- Finish latest template migration ([`dcd1153`](https://github.com/34j/array-api-shape-check/commit/dcd1153cb814b9453378546bdd974240c1fbe266))
+
 ## v0.1.3 (2026-05-13)
 
 ### Bug fixes
