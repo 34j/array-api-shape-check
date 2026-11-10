@@ -39,36 +39,46 @@ class SubscriptInfoFromShapeItemUnchecked(SubscriptInfoFromSubcriptItem):
 
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItemUnique(SubscriptInfoFromSubcriptItem):
-    shape_broadcasted: tuple[int, ...]
-    """The shape after broadcasting with other subscripts with the same name"""
+class SubscriptInfoFromShapeItemUnique[BroadcastShape: tuple[int, ...] | None](
+    SubscriptInfoFromSubcriptItem
+):
+    shape_broadcasted: BroadcastShape
+    """The broadcast shape, or None for an inconsistent subscript."""
 
     def __repr__(self) -> str:
         if self.is_variable:
             return f"*{self.name}:{self.shape_broadcasted}"
-        return f"{self.name}:{self.shape_broadcasted[0]}"
+        if self.shape_broadcasted is None:
+            return f"{self.name}:None"
+        return f"{self.name}:{cast('tuple[int, ...]', self.shape_broadcasted)[0]}"
 
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShapeItem(SubscriptInfoFromShapeItemUnchecked):
-    shape_broadcasted: tuple[int, ...]
-    """The shape after broadcasting with other subscripts with the same name"""
+class SubscriptInfoFromShapeItem[BroadcastShape: tuple[int, ...] | None](
+    SubscriptInfoFromShapeItemUnchecked
+):
+    shape_broadcasted: BroadcastShape
+    """The broadcast shape, or None for an inconsistent subscript."""
 
     def __repr__(self) -> str:
+        if self.shape_broadcasted is None:
+            current = self.shape_current if self.is_variable else self.shape_current[0]
+            return f"{'*' if self.is_variable else ''}{self.name}:{current}->None"
         if self.is_variable:
             if self.shape_current != self.shape_broadcasted:
                 return f"*{self.name}:{self.shape_current}->{self.shape_broadcasted}"
             return f"*{self.name}:{self.shape_current}"
         if self.shape_current != self.shape_broadcasted:
-            return f"{self.name}:{self.shape_current[0]}->{self.shape_broadcasted[0]}"
+            broadcasted = cast("tuple[int, ...]", self.shape_broadcasted)
+            return f"{self.name}:{self.shape_current[0]}->{broadcasted[0]}"
         return f"{self.name}:{self.shape_current[0]}"
 
 
 @attrs.frozen(kw_only=True)
-class SubscriptInfoFromShape:
-    all: tuple[tuple[SubscriptInfoFromShapeItem, ...], ...]
+class SubscriptInfoFromShape[BroadcastShape: tuple[int, ...] | None]:
+    all: tuple[tuple[SubscriptInfoFromShapeItem[BroadcastShape], ...], ...]
     """The subscript info grouped by order, then by operand"""
-    unique: dict[str, SubscriptInfoFromShapeItemUnique]
+    unique: dict[str, SubscriptInfoFromShapeItemUnique[BroadcastShape]]
     """The unique subscripts,
     ignoring order and shapes not broadcasted,
     sorted lexicographically by name"""
@@ -111,9 +121,14 @@ class InconsistentNdimErrorNoSolutions(InconsistentNdimError):  # noqa: N818
 
 
 class InconsistentShapeError(ValueError):
-    subscript_info: SubscriptInfoFromShape
+    subscript_info: SubscriptInfoFromShape[tuple[int, ...] | None]
 
-    def __init__(self, subscript_info: SubscriptInfoFromShape, reason: str, *args: object) -> None:
+    def __init__(
+        self,
+        subscript_info: SubscriptInfoFromShape[tuple[int, ...] | None],
+        reason: str,
+        *args: object,
+    ) -> None:
         super().__init__("Inconsistent shapes: " + str(subscript_info.all) + f"\n {reason}", *args)
         self.subscript_info = subscript_info
 
@@ -344,7 +359,7 @@ def _parse_shapes(
 
 def check_shapes(
     subscripts: str, /, *operands: Array | tuple[int | None, ...], names: str | None = None
-) -> SubscriptInfoFromShape:
+) -> SubscriptInfoFromShape[tuple[int, ...]]:
     """
     Parse variable subscript ndims by solving linear equations.
 
@@ -435,12 +450,15 @@ def check_shapes(
     info_flatten_keyed = [(i, item) for i, info_array in enumerate(info_all) for item in info_array]
     errors = []
     shape_broadcasted = {}
-    for key, group in groupby(info_flatten_keyed, key=lambda x: x[1].name):
+    for key, group in groupby(
+        sorted(info_flatten_keyed, key=lambda x: x[1].name), key=lambda x: x[1].name
+    ):
         group_list = list(group)
         shapes = [item.shape_current for _, item in group_list]
         try:
             shape_broadcasted[key] = np.broadcast_shapes(*shapes)
         except ValueError:
+            shape_broadcasted[key] = None
             inner_text = ", ".join([f"{shape} ({names_[i]})" for i, shape in group_list])
             errors.append(f"Key {key}: shapes {inner_text} are not broadcastable")
 
@@ -475,4 +493,5 @@ def check_shapes(
     if errors:
         raise InconsistentShapeError(result, "\n".join(errors))
 
-    return result
+    # No broadcast shape can be None unless an inconsistency was recorded.
+    return cast("SubscriptInfoFromShape[tuple[int, ...]]", result)
